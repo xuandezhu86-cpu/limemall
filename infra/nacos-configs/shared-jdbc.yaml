@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${lm.db.host:localhost}:${lm.db.port:3306}/${lm.db.database}?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${lm.db.un:root}
+    password: ${lm.db.pw:LmDb2026}
+mybatis-plus:
+  configuration:
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
+  global-config:
+    db-config:
+      update-strategy: not_null
+      id-type: auto

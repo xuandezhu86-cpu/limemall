@@ -1,0 +1,5 @@
+lm:
+  cart:
+    # 注意：代码里 CartProPerties 的字段名是 maxItems（不是课程笔记里的 maxAmount）
+    # 课程演示“购物车已满”时可改成 2
+    maxItems: 20

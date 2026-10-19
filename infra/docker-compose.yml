@@ -1,0 +1,129 @@
+# 青柠商城 LimeMall 本地中间件编排（Windows + Docker Desktop / WSL2）
+# 启动： docker compose -f infra/docker-compose.yml up -d    （在项目根目录执行）
+# 端口： MySQL 3306 / Nacos 8848+9848 / RabbitMQ 5672+15672 / Redis 6381 / Seata 8091+7091 / Sentinel 8090 / Nginx 80+18080-18082
+name: lm-infra
+
+services:
+  mysql:
+    image: mysql:8.0.36
+    container_name: lm-mysql
+    # mysql_native_password 让 JDBC 免去 public key retrieval 问题；utf8mb4 支持中文
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: "LmDb2026"
+    ports:
+      - "3306:3306"
+    volumes:
+      - lm-mysql-data:/var/lib/mysql
+      # 首次启动自动执行：建库 + nacos 表 + 各业务库表和数据
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pLmDb2026"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  nacos:
+    image: nacos/nacos-server:v2.1.0-slim
+    container_name: lm-nacos
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      TZ: Asia/Shanghai
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: host.docker.internal
+      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_PORT: "3306"
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: "LmDb2026"
+      MYSQL_SERVICE_DB_PARAM: characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  rabbitmq:
+    # 自定义镜像：官方镜像不带延迟消息插件，见 ./rabbitmq/Dockerfile
+    build: ./rabbitmq
+    image: limemall/rabbitmq-delayed:3.8
+    container_name: lm-mq
+    hostname: mq
+    environment:
+      TZ: Asia/Shanghai
+      RABBITMQ_DEFAULT_USER: limemall
+      RABBITMQ_DEFAULT_PASS: "LmMq2026"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - lm-mq-data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  # 注意：宿主机 6379/6380 已被别的项目占用，这里映射到 6381
+  redis:
+    image: redis:7
+    container_name: lm-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6381:6379"
+    volumes:
+      - lm-redis-data:/data
+    restart: unless-stopped
+
+  seata:
+    image: seataio/seata-server:1.5.2
+    container_name: lm-seata
+    environment:
+      TZ: Asia/Shanghai
+      SEATA_IP: 127.0.0.1          # 服务跑在宿主机上，注册回环地址即可直连映射端口
+      SEATA_PORT: "8091"
+      STORE_MODE: file
+    ports:
+      - "8091:8091"                # 事务协调器端口（客户端连这个）
+      - "7091:7091"                # 控制台
+    volumes:
+      - ./seata/application.yml:/seata-server/resources/application.yml:ro
+    depends_on:
+      nacos:
+        condition: service_started
+    restart: unless-stopped
+
+  sentinel:
+    image: bladex/sentinel-dashboard:1.8.6
+    container_name: lm-sentinel
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "8090:8858"
+    restart: unless-stopped
+
+  # 前端：门户 18080 / 后台 18081 / 运营后台 18082，/api 反代到宿主机网关
+  # 静态文件直接挂载项目里的 lm-nginx/html
+  nginx:
+    image: nginx:1.22
+    container_name: lm-nginx
+    ports:
+      - "80:80"
+      - "18080:18080"
+      - "18081:18081"
+      - "18082:18082"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./lm-nginx/html:/etc/nginx/html:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  lm-mysql-data:
+  lm-mq-data:
+  lm-redis-data:

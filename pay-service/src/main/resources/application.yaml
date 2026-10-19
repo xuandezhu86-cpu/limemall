@@ -1,0 +1,53 @@
+server:
+  port: 8086
+spring:
+  application:
+    name: pay-service   #微服务名称
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:mysql://${lm.db.host}:3306/lm_pay?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: ${lm.db.pw}
+  cloud:
+    nacos:
+      server-addr: localhost:8848
+  rabbitmq:
+    host: localhost # 你的虚拟机IP
+    port: 5672 # 端口
+    virtual-host: /limemall # 虚拟主机
+    username: limemall # 用户名
+    password: LmMq2026 # 密码
+mybatis-plus:
+  configuration:
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
+  global-config:
+    db-config:
+      update-strategy: not_null
+      id-type: auto
+logging:
+  level:
+    com.limemall: debug
+  pattern:
+    dateformat: HH:mm:ss:SSS
+  file:
+    path: "logs/${spring.application.name}"
+knife4j:
+  enable: true
+  openapi:
+    title: 青柠商城支付服务接口文档
+    description: "青柠商城支付服务接口文档"
+    email: zhanghuyi@example.com
+    concat: LimeMall
+    url: https://www.example.com
+    version: v1.0.0
+    group:
+      default:
+        group-name: default
+        api-rule: package
+        api-rule-resources:
+          - com.limemall.pay.controller
+feign:
+  okhttp:
+    enabled: true # 开启OKHttp功能

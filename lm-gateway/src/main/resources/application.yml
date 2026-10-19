@@ -1,0 +1,14 @@
+server:
+  port: 8080
+lm:
+  jwt:
+    location: classpath:limemall.jks
+    alias: limemall
+    password: limemall123
+    tokenTTL: 30m
+  auth:
+    excludePaths:
+      - /search/**
+      - /users/login
+      - /items/**
+      - /hi

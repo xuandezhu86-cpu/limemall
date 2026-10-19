@@ -1,0 +1,15 @@
+knife4j:
+  enable: true
+  openapi:
+    title: ${lm.swagger.title:青柠商城接口文档}
+    description: ${lm.swagger.description:青柠商城接口文档}
+    email: ${lm.swagger.email:zhanghuyi@example.com}
+    concat: ${lm.swagger.concat:LimeMall}
+    url: https://www.example.com
+    version: v1.0.0
+    group:
+      default:
+        group-name: default
+        api-rule: package
+        api-rule-resources:
+          - ${lm.swagger.package}

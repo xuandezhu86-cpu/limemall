@@ -1,0 +1,4 @@
+lm:
+  db:
+    host: localhost # 修改为你自己的虚拟机IP地址
+    pw: "LmDb2026" # 修改为docker中的MySQL密码

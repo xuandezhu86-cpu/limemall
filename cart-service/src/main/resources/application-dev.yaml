@@ -1,0 +1,4 @@
+lm:
+  db:
+    host: localhost
+    pw: "LmDb2026"

@@ -1,0 +1,15 @@
+server:
+  port: 8085
+lm:
+  db:
+    database: lm_trade
+  swagger:
+    title: "青柠商场交易服务接口文档"
+    package: com.limemall.trade.controller
+spring:
+  rabbitmq:
+    host: localhost # 你的虚拟机IP
+    port: 5672 # 端口
+    virtual-host: /limemall # 虚拟主机
+    username: limemall # 用户名
+    password: LmMq2026 # 密码

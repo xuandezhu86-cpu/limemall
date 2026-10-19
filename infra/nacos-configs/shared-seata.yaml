@@ -1,0 +1,11 @@
+seata:
+  # 客户端直连：Seata 容器注册的是容器内网 IP，宿主机路由不到，
+  # 因此这里用 file 注册 + grouplist 指向映射到宿主机的 8091 端口。
+  registry:
+    type: file
+  tx-service-group: limemall
+  service:
+    vgroup-mapping:
+      limemall: "default"
+    grouplist:
+      default: 127.0.0.1:8091
