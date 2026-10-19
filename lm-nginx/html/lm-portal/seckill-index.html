@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=9; IE=8; IE=7; IE=EDGE">
+  <title>青柠商城--限时秒杀</title>
+
+  <link rel="stylesheet" type="text/css" href="./css/index.css"/>
+  <link rel="stylesheet" type="text/css" href="./css/webbase.css"/>
+</head>
+
+<body>
+<div id="seckillApp">
+  <top></top>
+
+  <div class="py-container" style="padding:20px 0 60px;">
+    <h3 style="margin:10px 0 20px;">限时秒杀</h3>
+
+    <div v-if="loading" style="padding:40px;text-align:center;color:#999;">加载中...</div>
+
+    <div v-else-if="!activity" style="padding:40px;text-align:center;color:#999;">
+      活动信息加载失败，请稍后重试
+      <div style="margin-top:12px;"><a href="javascript:void(0)" @click="loadActivity">重新加载</a></div>
+    </div>
+
+    <div v-else style="display:flex;border:1px solid #eee;padding:20px;background:#fff;">
+      <div style="width:280px;flex:0 0 280px;">
+        <img :src="activity.itemImage" style="width:260px;height:260px;object-fit:cover;"/>
+      </div>
+      <div style="flex:1;padding-left:20px;">
+        <h2 style="font-size:20px;margin:0 0 12px;">{{ activity.title || activity.itemName }}</h2>
+
+        <div style="background:#fff5f5;padding:14px;margin-bottom:16px;">
+          <div style="color:#e1251b;font-size:26px;font-weight:bold;">
+            ￥{{ formatPrice(activity.seckillPrice) }}
+            <span style="color:#999;font-size:14px;font-weight:normal;text-decoration:line-through;margin-left:10px;">
+              原价 ￥{{ formatPrice(activity.originPrice) }}
+            </span>
+          </div>
+          <div style="margin-top:10px;color:#666;font-size:13px;">
+            活动时间：{{ formatTime(activity.startTime) }} ~ {{ formatTime(activity.endTime) }}
+          </div>
+          <div style="margin-top:6px;color:#666;font-size:13px;">
+            剩余库存：<b :style="{color: activity.remainStock > 0 ? '#e1251b' : '#999'}">{{ activity.remainStock }}</b>
+            / {{ activity.totalStock }}
+          </div>
+          <div style="margin-top:6px;font-size:13px;" :style="{color: activity.ongoing ? '#2e8b57' : '#999'}">
+            活动状态：{{ activity.ongoing ? '进行中' : '未开始或已结束' }}
+          </div>
+        </div>
+
+        <div v-if="result" :style="{padding:'12px',marginBottom:'16px',background: result.success ? '#f0f9f0' : '#fff5f5', color: result.success ? '#2e8b57' : '#e1251b'}">
+          <div>{{ result.message }}</div>
+          <div v-if="result.orderId" style="margin-top:6px;font-size:13px;color:#666;">
+            订单号：{{ result.orderId }}
+            <span v-if="queuing">（正在排队落库，已查询 {{ pollCount }} 次）</span>
+          </div>
+        </div>
+
+        <button @click="doSeckill" :disabled="!canBuy"
+                :style="{padding:'14px 50px',fontSize:'18px',border:'none',cursor: canBuy ? 'pointer' : 'not-allowed',
+                         background: canBuy ? '#e1251b' : '#ccc', color:'#fff', borderRadius:'3px'}">
+          {{ buttonText }}
+        </button>
+
+        <div style="margin-top:14px;color:#999;font-size:12px;line-height:1.8;">
+          每人限购 1 件 · 下单后请在 15 分钟内完成支付<br/>
+          抢购结果异步落库，点击后可在上方看到「排队中 → 抢购成功」的状态变化
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+<script src="./js/vue.js"></script>
+<script src="./js/axios.min.js"></script>
+<script src="./js/common.js"></script>
+<script src="./js/top.js"></script>
+<script type="text/javascript">
+  var ACTIVITY_ID = 1001;
+
+  var seckillVm = new Vue({
+    el: "#seckillApp",
+    data: {
+      activityId: ACTIVITY_ID,
+      activity: null,
+      result: null,
+      loading: true,
+      submitting: false,
+      queuing: false,
+      pollCount: 0,
+      pollTimer: null,
+      util
+    },
+    computed: {
+      canBuy() {
+        return !this.submitting && this.activity && this.activity.ongoing && this.activity.remainStock > 0;
+      },
+      buttonText() {
+        if (this.submitting) return '抢购中...';
+        if (!this.activity) return '立即抢购';
+        if (!this.activity.ongoing) return '活动未开始';
+        if (this.activity.remainStock <= 0) return '已售罄';
+        return '立即抢购';
+      }
+    },
+    mounted() {
+      // 秒杀相关接口都需要登录（网关鉴权），未登录先记住回跳地址再去登录页
+      if (!util.isLogin()) {
+        util.store.set("return-url", location.href);
+        location.href = "login.html";
+        return;
+      }
+      this.loadActivity();
+    },
+    methods: {
+      formatPrice: util.formatPrice,
+      formatTime(val) {
+        return val ? String(val).replace('T', ' ').substring(0, 16) : '-';
+      },
+      loadActivity() {
+        this.loading = true;
+        axios.get('/seckill/activity/' + this.activityId)
+          .then(data => {
+            this.activity = data;
+          })
+          .catch(() => {
+            this.activity = null;
+          })
+          .finally(() => {
+            this.loading = false;
+          });
+      },
+      // 秒杀接口需要登录：未登录先记住回跳地址再去登录页（与 cart.html 一致）
+      doSeckill() {
+        if (!util.isLogin()) {
+          util.store.set("return-url", location.href);
+          location.href = "login.html";
+          return;
+        }
+        if (!this.canBuy) {
+          return;
+        }
+        this.submitting = true;
+        this.result = null;
+        axios.post('/seckill/' + this.activityId, null, { timeout: 15000 })
+          .then(data => {
+            this.result = data;
+            if (data.success && data.orderId) {
+              // 秒杀是「Redis 预扣 + MQ 异步落库」，这里轮询查询最终结果
+              this.queuing = true;
+              this.pollCount = 0;
+              this.pollResult(data.orderId);
+            }
+            this.loadActivity();
+          })
+          .catch(error => {
+            const msg = (error.response && error.response.data && error.response.data.msg) || '抢购失败，请稍后再试';
+            this.result = { success: false, message: msg };
+          })
+          .finally(() => {
+            this.submitting = false;
+          });
+      },
+      pollResult(orderId) {
+        if (this.pollCount >= 10) {
+          this.queuing = false;
+          return;
+        }
+        this.pollCount++;
+        this.pollTimer = setTimeout(() => {
+          axios.get('/seckill/result/' + orderId)
+            .then(data => {
+              this.result = data;
+              // status=0(处理中) 时继续轮询，落库完成后 message 会变成「抢购成功，请尽快支付」
+              if (data.message && data.message.indexOf('排队中') >= 0) {
+                this.pollResult(orderId);
+              } else {
+                this.queuing = false;
+              }
+            })
+            .catch(() => {
+              this.queuing = false;
+            });
+        }, 800);
+      }
+    },
+    beforeDestroy() {
+      if (this.pollTimer) {
+        clearTimeout(this.pollTimer);
+      }
+    }
+  });
+</script>
+</html>
