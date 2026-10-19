@@ -138,6 +138,8 @@ java -jar lm-gateway/target/lm-gateway.jar
 | RabbitMQ 控制台 | http://localhost:15672 | `limemall` / `LmMq2026` |
 | Sentinel 控制台 | http://localhost:8090 | `sentinel` / `sentinel` |
 | Seata 控制台 | http://localhost:7091 | `seata` / `seata` |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | `admin` / `LmGrafana2026` |
 
 ## 秒杀设计（抗瞬时高并发）
 
@@ -186,6 +188,42 @@ java -jar lm-gateway/target/lm-gateway.jar
 | 缓存击穿 | 失效后 60 个并发请求：DB 回源 **恰好 1 次**，其余 58 个线程自旋拿到重建结果 |
 | 跨实例一致性 | 实例 B 更新价格后，实例 A 立即读到新值（L1 被广播失效） |
 | L1 命中率 | 约 0.80（其余为压测用的直连 DB 对照请求与主动失效） |
+
+## 可观测性（指标 + 面板 + 告警）
+
+```
+各服务 Actuator + Micrometer ──/actuator/prometheus──▶ Prometheus ──▶ Grafana 面板
+   （管理端口 908x，与业务端口隔离）                      │
+                                                      └──▶ 7 条告警规则（Prometheus /alerts 可见）
+```
+
+- **管理端口与业务端口分离**：Actuator 只监听 `业务端口 + 1000`（网关 9080、商品 9081、购物车 9082、用户 9084、交易 9085、支付 9086、秒杀 9087），业务端口不再暴露任何管理端点。这既是安全实践，也顺带绕开了 springfox 2.10.5 与 Boot 2.6+ 的兼容问题。
+- **打开 HTTP 延迟直方图**：`management.metrics.distribution.percentiles-histogram.http.server.requests=true`，否则 Prometheus 只有 count/sum，算不出 P95/P99。
+- **自定义业务指标**：商品缓存的 10 个指标（`limemall_cache_l1_hits`、`limemall_cache_db_loads`、`limemall_cache_bloom_rejects` …）直接画进面板，缓存效果一眼可见。
+
+**面板（Grafana，自动 provisioning）**：在线服务数、总 QPS、5xx 速率、缓存回源速率、布隆累计拦截、JVM 堆、各服务 QPS、接口 P95、缓存命中 vs 回源、JVM 堆趋势、HikariCP 活跃/等待连接、MQ 收发速率。
+
+**告警规则**：
+
+| 告警 | 触发条件 | 级别 |
+|---|---|---|
+| ServiceDown | 实例连续 30s 抓不到指标 | critical |
+| HighHttpErrorRate | 5xx 速率 > 0.05/s 持续 1 分钟 | warning |
+| SlowApiP95 | 接口 P95 > 500ms 持续 2 分钟 | warning |
+| HighJvmHeapUsage | 堆使用率 > 85% 持续 2 分钟 | warning |
+| DbConnectionPoolSaturated | 连接池活跃占比 > 80% 持续 2 分钟 | warning |
+| CacheHitRateLow | L1 命中率 < 50% 持续 5 分钟 | info |
+| CacheHeavyDatabaseFallback | 缓存回源 > 50 次/秒 持续 2 分钟 | info |
+
+**实测数据**（造流量后从 Prometheus 查询）：
+
+| 指标 | 数值 |
+|---|---|
+| 全站 QPS | 11.1 |
+| 接口 P95 | 全站 40.9ms、item-service 4.8ms、seckill-service 87.3ms |
+| 商品详情缓存 | 300 次请求 → L1 命中 299 次、回源 DB 0 次 |
+| MQ 收发 | 发送 0.34/s、消费 0.34/s（秒杀异步下单链路） |
+| 告警状态 | 7 条规则全部 inactive（系统健康） |
 
 ## 核心接口
 
@@ -247,7 +285,7 @@ curl -X POST http://localhost:8080/orders \
 - [x] 阶段二：容器化部署、前端静态资源托管、一键启动脚本
 - [x] 阶段三：秒杀服务（Redis + Lua 预扣、令牌桶限流、MQ 异步削峰、一人一单、对账补偿）
 - [x] 阶段四：商品详情多级缓存（Caffeine + Redis、击穿/穿透/雪崩治理、跨实例失效广播）
-- [ ] 阶段五：可观测性（Prometheus + Grafana 指标监控、链路追踪、慢接口告警）
+- [x] 阶段五：可观测性（Actuator + Prometheus 指标、Grafana 面板、7 条告警规则、管理端口隔离）
 - [ ] 阶段六：压测与调优（JMeter 压测报告、索引与连接池调优）
 
 部署与排错细节见 [infra/README.md](infra/README.md)。

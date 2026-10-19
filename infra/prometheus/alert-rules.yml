@@ -1,0 +1,75 @@
+# LimeMall 告警规则
+# 在 Prometheus 的 /alerts 页面可以看到规则的实时状态（inactive / pending / firing）
+groups:
+  - name: limemall-availability
+    rules:
+      - alert: ServiceDown
+        expr: up{job="limemall-services"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "服务不可用：{{ $labels.instance }}"
+          description: "Prometheus 已连续 30s 抓不到该实例的指标，检查进程是否退出或端口是否被占用。"
+
+      - alert: HighHttpErrorRate
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[1m])) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} 5xx 错误率过高"
+          description: "近 1 分钟 5xx 速率超过 0.05/s，请检查下游依赖（DB / Redis / MQ）与异常日志。"
+
+      - alert: SlowApiP95
+        expr: histogram_quantile(0.95, sum by (le, application) (rate(http_server_requests_seconds_bucket[1m]))) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} P95 响应超过 500ms"
+          description: "接口 P95 延迟持续偏高，检查慢 SQL、缓存命中率与线程池排队情况。"
+
+  - name: limemall-resources
+    rules:
+      - alert: HighJvmHeapUsage
+        expr: sum by (application) (jvm_memory_used_bytes{area="heap"}) / sum by (application) (jvm_memory_max_bytes{area="heap"}) > 0.85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} JVM 堆使用率超过 85%"
+          description: "存在 OOM 风险，可结合 GC 次数与堆直方图排查内存泄漏或缓存过大。"
+
+      - alert: DbConnectionPoolSaturated
+        expr: sum by (application) (hikaricp_connections_active) / sum by (application) (hikaricp_connections_max) > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} 数据库连接池接近打满"
+          description: "活跃连接占比超过 80%，可能是慢 SQL 或连接未及时释放。"
+
+  - name: limemall-cache
+    rules:
+      - alert: CacheHitRateLow
+        expr: |
+          sum by (application) (rate(limemall_cache_l1_hits[5m]))
+          /
+          clamp_min(sum by (application) (rate(limemall_cache_l1_hits[5m]) + rate(limemall_cache_l1_misses[5m])), 0.001)
+          < 0.5
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $labels.application }} 本地缓存命中率低于 50%"
+          description: "缓存命中率过低会让请求大量回源数据库，检查缓存是否被频繁失效或容量过小。"
+
+      - alert: CacheHeavyDatabaseFallback
+        expr: sum by (application) (rate(limemall_cache_db_loads[1m])) > 50
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $labels.application }} 缓存回源次数偏高"
+          description: "每秒回源数据库超过 50 次，可能是缓存击穿或热点 key 频繁失效。"

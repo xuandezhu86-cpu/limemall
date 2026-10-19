@@ -10,12 +10,15 @@ import com.limemall.item.config.CacheProperties;
 import com.limemall.item.domain.dto.ItemDTO;
 import com.limemall.item.domain.po.Item;
 import com.limemall.item.mapper.ItemMapper;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,6 +59,7 @@ public class ItemCacheService {
     private final CacheProperties properties;
     private final BloomFilterService bloomFilter;
     private final RabbitTemplate rabbitTemplate;
+    private final MeterRegistry meterRegistry;
 
     /* 统计指标：对外暴露命中率，方便压测与监控 */
     private final LongAdder l1Hit = new LongAdder();
@@ -67,6 +71,24 @@ public class ItemCacheService {
     private final LongAdder nullCached = new LongAdder();
     private final LongAdder lockSpin = new LongAdder();
     private final LongAdder lockRebuild = new LongAdder();
+
+    /**
+     * 把缓存指标注册到 Micrometer，Prometheus 抓取后即可在 Grafana 上画缓存命中率曲线
+     * （自定义业务指标，指标名统一加 limemall_cache_ 前缀）。
+     */
+    @PostConstruct
+    public void registerMetrics() {
+        Gauge.builder("limemall_cache_l1_hits", l1Hit, LongAdder::sum).description("L1(Caffeine) 命中次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_l1_misses", l1Miss, LongAdder::sum).description("L1 未命中次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_l2_hits", l2Hit, LongAdder::sum).description("L2(Redis) 命中次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_l2_misses", l2Miss, LongAdder::sum).description("L2 未命中次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_db_loads", dbLoad, LongAdder::sum).description("回源数据库次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_bloom_rejects", bloomReject, LongAdder::sum).description("布隆过滤器拦截次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_null_cached", nullCached, LongAdder::sum).description("空值缓存写入次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_lock_rebuilds", lockRebuild, LongAdder::sum).description("互斥锁重建次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_lock_spins", lockSpin, LongAdder::sum).description("自旋等待命中次数").register(meterRegistry);
+        Gauge.builder("limemall_cache_l1_size", itemLocalCache, c -> c.estimatedSize()).description("L1 缓存条目数").register(meterRegistry);
+    }
 
     /* ==================== 单条读取 ==================== */
 

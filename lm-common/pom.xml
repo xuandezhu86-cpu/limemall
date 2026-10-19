@@ -91,5 +91,11 @@
             <artifactId>jackson-dataformat-xml</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!--JsonConfig 里直接使用了 ObjectMapper，这里显式声明，避免依赖传递变化导致编译失败-->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

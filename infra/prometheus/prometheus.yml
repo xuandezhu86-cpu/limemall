@@ -1,0 +1,29 @@
+# LimeMall 监控抓取配置
+# 各服务通过 Actuator + Micrometer 暴露指标：/actuator/prometheus
+# Prometheus 跑在容器里，服务跑在宿主机上，所以用 host.docker.internal
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  external_labels:
+    env: local
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+scrape_configs:
+  # 管理端口（业务端口 + 1000）与业务端口分离，Actuator 不暴露在业务端口上
+  - job_name: limemall-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:9080   # lm-gateway
+          - host.docker.internal:9081   # item-service
+          - host.docker.internal:9082   # cart-service
+          - host.docker.internal:9084   # user-service
+          - host.docker.internal:9085   # trade-service
+          - host.docker.internal:9086   # pay-service
+          - host.docker.internal:9087   # seckill-service
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

@@ -1,6 +1,10 @@
 server:
   port: 8080
 spring:
+  # springfox 2.10.5 不支持 Boot 2.6+ 默认的 PathPatternParser，需回退到 ant 匹配
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
   application:
     name: lm-shop
   profiles:
@@ -55,3 +59,33 @@ lm:
       - /items/**
       - /hi
 # keytool -genkeypair -alias limemall -keyalg RSA -keypass limemall123 -keystore limemall.jks -storepass limemall123
+
+# ---------- 可观测性：健康检查与 Prometheus 指标 ----------
+management:
+  # 管理端口与业务端口分离：Actuator 不暴露在业务端口上（也更安全）
+  server:
+    port: 9089
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    # 打开 HTTP 接口的直方图，Prometheus 才能算 P95/P99（慢接口告警依赖它）
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+      minimum-expected-value:
+        http.server.requests: 5ms
+      maximum-expected-value:
+        http.server.requests: 5s
+  prometheus:
+    metrics:
+      export:
+        enabled: true
