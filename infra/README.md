@@ -30,18 +30,58 @@
 
 ## 二、日常启停
 
+### 启动
+
 ```powershell
-# 一键启动（会自动拉起 Docker Desktop、起容器、发 Nacos 配置、按顺序起 7 个服务，失败会自动重试一轮）
+# 一键启动：自动拉起 Docker Desktop、起 10 个容器、发布 Nacos 配置、按顺序启动 7 个服务
+# （启动失败会自动重试一轮；jar 不存在时会先自动编译）
 powershell -ExecutionPolicy Bypass -File "<项目根>\infra\start-all.ps1"
 
-# 只停 Java 服务（容器继续跑，数据不丢）
+# 单独起/重启某个服务（<模块名> = lm-gateway / item-service / cart-service /
+#   user-service / trade-service / pay-service / seckill-service）
+powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" <模块名>
+
+# 起第二个实例（用于验证多实例本地缓存一致性，管理端口自动按 +1000 派生）
+powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" item-service -Port 8088
+```
+
+### 关闭（三个层级，按需选一个）
+
+```powershell
+# ① 只停 Java 服务：释放约 5GB 内存，中间件继续跑，下次启动最快（推荐日常用）
+#    停掉的是 8080/8081/8082/8084/8085/8086/8087/8088 这 8 个端口上的进程（含第二个实例）
 powershell -ExecutionPolicy Bypass -File "<项目根>\infra\stop-all.ps1"
 
-# 连容器一起停（数据卷保留）
+# ② 连容器一起停：MySQL/Redis/MQ/Nacos 等 10 个容器全部停止，数据卷保留，下次 up 数据还在
 powershell -ExecutionPolicy Bypass -File "<项目根>\infra\stop-all.ps1" -All
 
-# 单独起/重启某个服务（把 <模块名> 换成 lm-gateway / item-service / cart-service / user-service / trade-service / pay-service / seckill-service）
-powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" <模块名>
+# ③ 再退出 Docker Desktop（托盘图标右键 Quit，或下面这行）：WSL2 占用的内存这时才真正归还
+Stop-Process -Name "Docker Desktop" -Force -ErrorAction SilentlyContinue
+```
+
+停完可以这样确认：
+
+```powershell
+# 业务端口应全部连不上
+foreach ($p in 8080,8081,8082,8084,8085,8086,8087,8088) {
+  $c = New-Object System.Net.Sockets.TcpClient
+  try { $null = $c.BeginConnect('127.0.0.1',$p,$null,$null); Start-Sleep -Milliseconds 150; "  $p -> $($c.Connected)" }
+  catch { "  $p -> False" } finally { $c.Close() }
+}
+# 容器应一个都不剩
+docker ps --filter "name=lm-" --format "{{.Names}}"
+```
+
+### 其它常用操作
+
+```powershell
+# 只想停某一个服务（例如秒杀服务）
+Get-NetTCPConnection -LocalPort 8087 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+
+# 彻底清空重来：删掉数据卷（⚠️ 数据库、Redis、MQ 数据全没）
+docker compose -f "<项目根>\infra\docker-compose.yml" down -v
+docker compose -f "<项目根>\infra\docker-compose.yml" up -d
+#   mysql-init 里的脚本会在数据卷为空时自动重建库表与种子数据
 ```
 
 > 重启单个服务的正确姿势：先 `stop-all.ps1` 停掉（或按端口杀进程），再 `run-service.ps1` 起。
