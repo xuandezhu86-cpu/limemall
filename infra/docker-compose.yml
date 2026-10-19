@@ -156,6 +156,17 @@ services:
       - prometheus
     restart: unless-stopped
 
+  # 链路追踪：各服务通过 Sleuth 上报，Zipkin 负责收集与展示
+  zipkin:
+    image: openzipkin/zipkin:3.3.0
+    container_name: lm-zipkin
+    environment:
+      TZ: Asia/Shanghai
+      STORAGE_TYPE: mem
+    ports:
+      - "9411:9411"
+    restart: unless-stopped
+
 volumes:
   lm-mysql-data:
   lm-mq-data:

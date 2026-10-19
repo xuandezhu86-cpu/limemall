@@ -140,6 +140,7 @@ java -jar lm-gateway/target/lm-gateway.jar
 | Seata 控制台 | http://localhost:7091 | `seata` / `seata` |
 | Prometheus | http://localhost:9090 | — |
 | Grafana | http://localhost:3000 | `admin` / `LmGrafana2026` |
+| Zipkin | http://localhost:9411 | — |
 
 ## 秒杀设计（抗瞬时高并发）
 
@@ -225,6 +226,26 @@ java -jar lm-gateway/target/lm-gateway.jar
 | MQ 收发 | 发送 0.34/s、消费 0.34/s（秒杀异步下单链路） |
 | 告警状态 | 7 条规则全部 inactive（系统健康） |
 
+## 链路追踪
+
+选型 **Sleuth + Zipkin**：与 Spring Cloud 原生集成、不需要额外探针，本地起一个容器即可。
+
+- 每个服务全量采样（本地演示 `probability: 1.0`，生产建议按比例采样如 0.1）
+- **traceId 自动透传**：HTTP 调用（Feign）、RabbitMQ 消息头、线程池任务，跨服务不丢链路
+- 日志格式自动带上 `[服务名,traceId,spanId]`，任意服务出问题都能按 traceId 串起全部日志
+- Redis 命令（`mget` / `setex` / `getbit`）与 MQ 生产消费（`publish` / `next-message`）也自动纳入链路
+
+**实测：一笔下单请求的完整链路**（Zipkin，24 个 span，端到端 263ms；冷启动首次调用约 2.6s）
+
+| 服务 | Span | 耗时 |
+|---|---|---|
+| gateway | `POST /orders` (SERVER) | 263.5 ms |
+| trade-service | `POST /orders` (SERVER) | 251.6 ms |
+| trade-service → item-service | 扣减库存 (CLIENT/SERVER) | 57.6 ms |
+| trade-service → cart-service | 清理购物车 (CLIENT/SERVER) | 40.7 ms |
+| trade-service | MQ 消费 `on-message` | 56.0 ms |
+| item-service | Redis `mget` / `setex` / `getbit` | 4.7 / 3.9 / 2.6 ms |
+
 ## 核心接口
 
 ```bash
@@ -285,7 +306,7 @@ curl -X POST http://localhost:8080/orders \
 - [x] 阶段二：容器化部署、前端静态资源托管、一键启动脚本
 - [x] 阶段三：秒杀服务（Redis + Lua 预扣、令牌桶限流、MQ 异步削峰、一人一单、对账补偿）
 - [x] 阶段四：商品详情多级缓存（Caffeine + Redis、击穿/穿透/雪崩治理、跨实例失效广播）
-- [x] 阶段五：可观测性（Actuator + Prometheus 指标、Grafana 面板、7 条告警规则、管理端口隔离）
+- [x] 阶段五：可观测性（Actuator + Prometheus 指标、Grafana 面板、7 条告警规则、管理端口隔离、Sleuth + Zipkin 链路追踪）
 - [ ] 阶段六：压测与调优（JMeter 压测报告、索引与连接池调优）
 
 部署与排错细节见 [infra/README.md](infra/README.md)。
