@@ -1,4 +1,4 @@
-"""生成「青柠商城 LimeMall」品牌图（替换课程原版黑马 logo）。
+"""生成「青柠商城 LimeMall」品牌图（门户与后台的 logo 素材）。
 
 用法： python make_logo.py
 依赖： Pillow

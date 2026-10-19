@@ -106,7 +106,7 @@ powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" <�
 | `limemall` | 单体版 lm-shop | 上面 8 张表合并 |
 | `nacos` | Nacos | 配置中心自带 12 张表 |
 
-- 脚本位置：`hmall-master\sql\`（`00-create-databases.sql` → 各库 → `02-undo-log.sql`）。
+- 脚本位置：`<项目根>\sql\`（`00-create-databases.sql` → 各库 → `02-undo-log.sql`）。
 - 测试账号密码是 BCrypt 哈希（明文 `123`），用 Spring Security 的 `BCryptPasswordEncoder` 生成并写入。
 - 金额列（`price`/`total_fee`/`balance`/`amount`）**单位是分**（Integer）。
 
@@ -138,7 +138,7 @@ powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" <�
    - JWT：`alias: limemall`、`password: limemall123`（用 keytool 验证过 `limemall.jks` 里只有别名 `limemall`）
    - RabbitMQ：`localhost:5672`、`virtual-host: /limemall`、`limemall` / `LmMq2026`
    - `lm-shop` 追加 `spring.redis.port: 6381`
-2. **新增 `hmall-master\sql\`**：按 PO/枚举类/自定义 Mapper SQL 逆向生成的建表脚本 + 测试数据（商品 24 条、用户/地址、BCrypt 密码）。
+2. **新增 `<项目根>\sql\`**：按 PO/枚举类/自定义 Mapper SQL 逆向生成的建表脚本 + 测试数据（商品 24 条、用户/地址、BCrypt 密码）。
 3. **Nacos 配置 6 份**：`shared-jdbc` / `shared-log` / `shared-swagger` / `shared-seata` / `cart-service` / `gateway-routes.json`。
    ⚠️ 课程笔记里购物车上限写的是 `lm.cart.maxAmount`，但代码里 `CartProPerties` 的字段是 **`maxItems`**，写成 `maxAmount` 会在加购时报 NPE，已修正。
 4. **RabbitMQ vhost 是 `/limemall`（带斜杠）**，不是 `limemall`；另需 `x-delayed-message` 插件（官方镜像不带），已用 `infra\rabbitmq\Dockerfile` 打进自定义镜像。
@@ -173,7 +173,7 @@ powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" <�
 ## 九、换机器从零复现
 
 1. 装 Docker Desktop（WSL2 后端）、JDK 11、Maven 3.9+（或直接拷贝本目录的 `tools\`）。
-2. 把本目录（`hmall-2\`）整体拷过去，路径**尽量不含中文**（Java/Maven 没问题，Windows 版 nginx 会踩坑）。
+2. 把整个项目目录整体拷过去，路径**尽量不含中文**（Java/Maven 没问题，Windows 版 nginx 会踩坑）。
 3. `docker compose -f infra\docker-compose.yml up -d`（首次会自动建库建表导数据，因为 `infra\mysql-init` 挂在 `/docker-entrypoint-initdb.d`）。
 4. 等 Nacos 起来后，跑 `infra\start-all.ps1`（它会自动发布 Nacos 配置、编译、按顺序启动服务）。
 5. 浏览器打开 http://localhost:18080 ，用 `jack` / `123` 登录。
