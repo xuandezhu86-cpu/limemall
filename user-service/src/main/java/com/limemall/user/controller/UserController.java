@@ -2,6 +2,7 @@ package com.limemall.user.controller;
 
 
 import com.limemall.user.domain.dto.LoginFormDTO;
+import com.limemall.user.domain.dto.RegisterFormDTO;
 import com.limemall.user.domain.vo.UserLoginVO;
 import com.limemall.user.service.IUserService;
 import io.swagger.annotations.Api;
@@ -24,6 +25,12 @@ public class UserController {
     @PostMapping("login")
     public UserLoginVO login(@RequestBody @Validated LoginFormDTO loginFormDTO){
         return userService.login(loginFormDTO);
+    }
+
+    @ApiOperation("用户注册接口")
+    @PostMapping("register")
+    public void register(@RequestBody @Validated RegisterFormDTO registerFormDTO){
+        userService.register(registerFormDTO);
     }
 
     @ApiOperation("扣减余额")

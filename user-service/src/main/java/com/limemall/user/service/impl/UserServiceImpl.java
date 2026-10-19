@@ -1,5 +1,6 @@
 package com.limemall.user.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.limemall.common.exception.BadRequestException;
 import com.limemall.common.exception.BizIllegalException;
@@ -8,6 +9,7 @@ import com.limemall.common.utils.UserContext;
 
 import com.limemall.user.config.JwtProperties;
 import com.limemall.user.domain.dto.LoginFormDTO;
+import com.limemall.user.domain.dto.RegisterFormDTO;
 import com.limemall.user.domain.po.User;
 import com.limemall.user.domain.vo.UserLoginVO;
 import com.limemall.user.enums.UserStatus;
@@ -18,7 +20,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+
+import java.time.LocalDateTime;
 
 /**
  * <p>
@@ -63,6 +68,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         vo.setBalance(user.getBalance());
         vo.setToken(token);
         return vo;
+    }
+
+    @Override
+    @Transactional
+    public void register(RegisterFormDTO registerDTO) {
+        String username = registerDTO.getUsername();
+        // 1.两次密码一致性校验（前端已经校验过，后端再兜一次，避免绕过页面直接调接口）
+        if (registerDTO.getConfirmPassword() != null
+                && !registerDTO.getConfirmPassword().equals(registerDTO.getPassword())) {
+            throw new BadRequestException("两次输入的密码不一致");
+        }
+        // 2.用户名唯一性校验（数据库上还有 uk_username 唯一索引兜底，防并发重复注册）
+        User exist = getOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username), false);
+        if (exist != null) {
+            throw new BizIllegalException("用户名「" + username + "」已被注册，换一个试试");
+        }
+        // 3.密码用 BCrypt 加密后落库（与登录校验用的是同一个 PasswordEncoder）
+        User user = new User()
+                .setUsername(username)
+                .setPassword(passwordEncoder.encode(registerDTO.getPassword()))
+                .setPhone(registerDTO.getPhone())
+                .setStatus(UserStatus.NORMAL)
+                // 演示用初始余额 1000.00 元，方便注册完直接走通「下单 → 支付」链路；真实项目不会有这笔钱
+                .setBalance(100000)
+                .setCreateTime(LocalDateTime.now())
+                .setUpdateTime(LocalDateTime.now());
+        save(user);
+        log.info("新用户注册成功 userId={}, username={}", user.getId(), username);
     }
 
     @Override

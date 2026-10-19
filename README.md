@@ -309,6 +309,11 @@ JMeter 5.6.3 非 GUI 模式压测，脚本与原始数据都在 `infra/jmeter/`�
 ## 核心接口
 
 ```bash
+# 注册新用户（网关放行，无需登录）
+curl -X POST http://localhost:8080/users/register \
+     -H "Content-Type: application/json" \
+     -d '{"username":"lime0001","password":"lime123456","confirmPassword":"lime123456","phone":"13800001234"}'
+
 # 登录获取 token
 curl -X POST http://localhost:8080/users/login \
      -H "Content-Type: application/json" \
@@ -327,7 +332,18 @@ curl -X POST http://localhost:8080/carts \
 curl -X POST http://localhost:8080/orders \
      -H "Content-Type: application/json" -H "authorization: <token>" \
      -d '{"addressId":1,"paymentType":3,"details":[{"itemId":1,"num":2}]}'
+
+# 申请支付 + 余额支付（支付密码即登录密码）
+curl -X POST http://localhost:8080/pay-orders \
+     -H "Content-Type: application/json" -H "authorization: <token>" \
+     -d '{"bizOrderNo":<orderId>,"amount":990,"payChannelCode":"balance","payType":5,"orderInfo":"{}"}'
+curl -X POST http://localhost:8080/pay-orders/<payId> \
+     -H "Content-Type: application/json" -H "authorization: <token>" -d '{"pw":"123"}'
 ```
+
+> 所有服务共用一套统一异常处理（`lm-common` 的 `CommonExceptionAdvice`，通过 `spring.factories` 条件装配，
+> 只在 Servlet 应用生效），业务异常统一返回 `{"code":400/500,"msg":"...","data":null}`，
+> 前端直接取 `msg` 展示即可。
 
 ## 目录结构
 

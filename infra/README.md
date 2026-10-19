@@ -223,6 +223,9 @@ docker compose -f "<项目根>\infra\docker-compose.yml" up -d
 ## 十、接口冒烟命令（可直接复制）
 
 ```powershell
+# 注册新用户（网关放行，注册后可直接登录；新用户带 1000 元演示余额，方便走通下单支付）
+curl.exe -s -X POST "http://localhost:8080/users/register" -H "Content-Type: application/json" -d '{\"username\":\"lime0001\",\"password\":\"lime123456\",\"confirmPassword\":\"lime123456\",\"phone\":\"13800001234\"}'
+
 # 登录拿 token
 curl.exe -s -X POST "http://localhost:8080/users/login" -H "Content-Type: application/json" -d '{\"username\":\"jack\",\"password\":\"123\"}'
 

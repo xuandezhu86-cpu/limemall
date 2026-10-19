@@ -224,7 +224,7 @@
             return false
           }
           // 注册
-          axios.post("/user/register", this.registerForm)
+          axios.post("/users/register", this.registerForm)
             .then(resp => {
               // 注册成功
               this.$message({
