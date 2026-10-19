@@ -22,9 +22,16 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# ---- 本地工具链（JDK/Maven 放在仓库外） ----
-tools/
+# ---- 本地工具链（JDK/Maven 放在仓库外，即 仓库根的上一级/tools） ----
+# 注意要写成 /tools/ 锚定到仓库根：写成 tools/ 会连 infra/tools/ 一起忽略掉
+/tools/
 
 # ---- 运行期数据 ----
 infra/data/
 *.pid
+
+# ---- 压测产物（.jtl 原始结果可达几十 MB，只在本地保留）----
+infra/jmeter/*.jtl
+infra/jmeter/results/*.jtl
+# 压测用的 JWT token 列表属于凭据，不入库
+infra/jmeter/seckill-tokens*.csv
