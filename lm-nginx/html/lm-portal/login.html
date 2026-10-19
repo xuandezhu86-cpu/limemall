@@ -106,12 +106,17 @@
       login() {
         axios.post("/users/login", this.form)
           .then(({token, ... user}) => {
-            sessionStorage.setItem("token", token)
+            localStorage.setItem("token", token)
             util.store.set("user-info", user)
+            // 从哪来回哪去：return-url 由被拦截的页面或未登录访问的页面写入，用掉就删掉
             const url = util.store.get("return-url");
+            util.store.del("return-url");
             window.location = url || '/';
           })
-          .catch(() => this.msg = '用户名或密码错误')
+          .catch(err => {
+            const data = err.response && err.response.data
+            this.msg = (data && data.msg) ? data.msg : '用户名或密码错误'
+          })
       }
     }
   });

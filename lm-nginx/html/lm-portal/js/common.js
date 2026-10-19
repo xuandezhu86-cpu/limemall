@@ -1,10 +1,15 @@
 // 设置后台服务地址
 axios.defaults.baseURL = "/api";
-axios.defaults.timeout = 2000;
+// 2 秒太短：本机一次冷启动调用（JIT/连接池预热）就可能超时，这里放宽到 8 秒
+axios.defaults.timeout = 8000;
 // request拦截器
 axios.interceptors.request.use(
   config => {
-    config.headers['authorization'] = sessionStorage.getItem("token")
+    const token = localStorage.getItem("token")
+    // 未登录时不要发一个 "null" 的 authorization 头，否则必然 401 并被踢回登录页
+    if (token) {
+      config.headers['authorization'] = token
+    }
     return config
   }
 )
@@ -12,22 +17,27 @@ axios.interceptors.request.use(
 axios.interceptors.response.use(
   response => response.data,
   err => {
-    if (err.response.status === 401) {
-      // 认证失败，需要重新登录
-	  sessionStorage.removeItem("user-info")
-      sessionStorage.removeItem("token")
-      location.href = "/login.html";
+    // 注意：超时/断网时 err.response 是 undefined，这里必须判空，
+    // 否则会在拦截器里抛 TypeError，页面自己的 catch 拿不到原始错误
+    if (err.response && err.response.status === 401) {
+      // 认证失败（未登录或 token 过期）：清掉失效登录态，记住当前页面，登录后自动跳回来
+      localStorage.removeItem("user-info")
+      localStorage.removeItem("token")
+      if (location.pathname.indexOf("login.html") < 0) {
+        localStorage.setItem("return-url", JSON.stringify(location.href))
+        location.href = "/login.html"
+      }
     }
     return Promise.reject(err)
   }
 )
 const util = {
   isLogin(){
-    return !!sessionStorage.getItem("user-info");
+    return !!localStorage.getItem("user-info");
   },
   logout(){
-    sessionStorage.removeItem("user-info")
-    sessionStorage.removeItem("token")
+    localStorage.removeItem("user-info")
+    localStorage.removeItem("token")
     location.reload();
   },
   getUrlParam(name) {
@@ -90,13 +100,13 @@ const util = {
   },
   store: {
     set(key, obj) {
-      sessionStorage.setItem(key, JSON.stringify(obj))
+      localStorage.setItem(key, JSON.stringify(obj))
     },
     get(key) {
-      return JSON.parse(sessionStorage.getItem(key))
+      return JSON.parse(localStorage.getItem(key))
     },
     del(key) {
-      sessionStorage.removeItem(key)
+      localStorage.removeItem(key)
     }
   }
 }

@@ -198,7 +198,7 @@
             axios.post("/users/login", this.loginForm)
               .then(resp => {
                 let {token, ...user} = resp.data;
-                sessionStorage.setItem("token", token)
+                localStorage.setItem("token", token)
                 util.store.set("user-info", user)
                 const url = util.store.get("return-url");
                 window.location = url || '/';

@@ -5,7 +5,7 @@ axios.defaults.timeout = 3000;
 // request拦截器
 axios.interceptors.request.use(
   config => {
-    config.headers['authorization'] = sessionStorage.getItem("token")
+    config.headers['authorization'] = localStorage.getItem("token")
     return config
   }
 )
@@ -25,14 +25,14 @@ const util = {
   theme:{menuBGC: "#545c64", menuColor:"#4d9af8"},
   isRouteAlive: true,
   isLogin(){
-    return !!sessionStorage.getItem("user-info");
+    return !!localStorage.getItem("user-info");
   },
   getUser(){
     return this.store.get("user-info");
   },
   logout(){
-    sessionStorage.removeItem("user-info")
-    sessionStorage.removeItem("token")
+    localStorage.removeItem("user-info")
+    localStorage.removeItem("token")
     location.reload();
   },
   reload(that, isGlobal){
@@ -54,13 +54,13 @@ const util = {
   },
   store: {
     set(key, obj) {
-      sessionStorage.setItem(key, JSON.stringify(obj))
+      localStorage.setItem(key, JSON.stringify(obj))
     },
     get(key) {
-      return JSON.parse(sessionStorage.getItem(key))
+      return JSON.parse(localStorage.getItem(key))
     },
     del(key) {
-      sessionStorage.removeItem(key)
+      localStorage.removeItem(key)
     }
   },
   formatPrice(val) {
