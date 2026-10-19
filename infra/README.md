@@ -22,6 +22,7 @@
 | **Zipkin**（链路追踪） | http://localhost:9411 | — |
 
 > 各服务的 Actuator 指标在**管理端口**（业务端口 + 1000）：网关 9080、商品 9081、购物车 9082、用户 9084、交易 9085、支付 9086、秒杀 9087，例如 http://localhost:9081/actuator/prometheus 。业务端口上不暴露管理端点。
+> 需要起**第二个实例**时用 `run-service.ps1 <模块名> -Port <端口>`，脚本会同时把管理端口派生成 `<端口>+1000`，否则第二个实例会因为管理端口被占用而启动失败。
 
 验证过的完整链路：登录 → 搜索/商品 → 加购物车 → 下单（Feign + Seata AT 全局事务，扣库存、清购物车）→ 申请支付 → 余额支付（扣余额）→ MQ 通知交易服务把订单改为「已付款」。
 
@@ -164,6 +165,7 @@ powershell -ExecutionPolicy Bypass -File "<项目根>\infra\run-service.ps1" <�
 | `lm-common` 编译报找不到 `ObjectMapper` | `jackson-dataformat-xml` 是 `provided` 作用域，传递依赖被 Maven 丢弃；已在 pom 里显式声明 `jackson-databind` |
 | Grafana 的 P95 面板没数据、慢接口告警不触发 | Boot 2.x 默认不导出 HTTP 延迟直方图，需 `management.metrics.distribution.percentiles-histogram.http.server.requests=true` |
 | 服务起来一会儿又自己没了 | 多半是内存被压垮（多个 JVM + Docker）。确认 `run-service.ps1` 的堆上限生效，或 `Get-CimInstance Win32_OperatingSystem` 看可用内存 |
+| 起第二个实例报 `Web server failed to start. Port 9081 was already in use` | 管理端口写死在配置里，第二个实例会和第一个撞端口。用 `run-service.ps1 item-service -Port 8088`，脚本会同时把管理端口派生成 9088 |
 | 想看某个服务日志 | `<项目根>\<模块>\logs\<服务名>\spring.log` |
 
 ---

@@ -148,7 +148,8 @@ Write-Host '[4] cross-instance consistency (L1 invalidation broadcast)'
 $preflight = curl.exe -s -m 30 -o NUL -w "%{http_code}" "$B/items/$ItemId"
 if ($preflight -ne '200') {
   Write-Host ("    SKIPPED: no second item-service instance reachable at {0} (http {1})" -f $B, $preflight) -ForegroundColor Yellow
-  Write-Host '    start one with:  java -Xms256m -Xmx512m -jar item-service/target/item-service.jar --server.port=8088'
+  Write-Host '    start one with:  powershell -File infra\run-service.ps1 item-service -Port 8088'
+  Write-Host '    (the management port is derived as business port + 1000, otherwise the second instance fails to bind)'
   Write-Host ''
   Write-Host '[5] final stats'
   Show-Stats (Get-Stats $A) 'after '
