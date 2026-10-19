@@ -1,10 +1,28 @@
 # 青柠商城 LimeMall
 
-一个基于 **Spring Cloud Alibaba** 的电商微服务平台，覆盖商品、搜索、购物车、交易、支付、用户六大业务域，
-包含网关鉴权、服务注册发现、分布式事务、消息驱动、缓存与限流等完整的微服务工程实践。
+一个基于 **Spring Cloud Alibaba** 的电商微服务平台，覆盖商品、搜索、购物车、交易、支付、用户、**秒杀**七大业务域，
+包含网关鉴权、服务注册发现、分布式事务、消息驱动、多级缓存、限流削峰、可观测性等完整的微服务工程实践。
 
-> 项目从单体架构出发（`lm-shop` 模块保留了单体基线），逐步演进为按业务域拆分的微服务架构，
-> 完整记录了一次真实的架构演进过程。
+> 项目从单体架构出发（`lm-shop` 模块保留了单体基线），逐步演进为按业务域拆分的微服务架构。
+
+## 项目亮点（数据均来自真实压测）
+
+| 亮点 | 实测结果 |
+|---|---|
+| **秒杀链路**：Redis+Lua 原子预扣 · 令牌桶限流 · MQ 异步削峰 · 一人一单 · 对账补偿 | 200 用户抢 100 件 → **恰好 100 单、零超卖**；吞吐 **105 TPS** vs 数据库悲观锁方案 43.5 TPS（**2.4 倍**），平均延迟下降 58% |
+| **商品详情多级缓存**：Caffeine + Redis + 布隆过滤器 + 互斥重建 + 广播失效 | **13,383 TPS / 平均 3.4ms** vs 直连数据库 2,689 TPS / 17.1ms（**约 5 倍**）；40 万次请求仅回源数据库 **3 次** |
+| **可观测性**：Prometheus + Grafana 指标面板 · 7 条告警 · Sleuth + Zipkin 链路追踪 | 12 个监控面板、7 条告警规则；一次下单可还原 **24 个 span** 的跨服务调用树（含 Redis 与 MQ） |
+| **压测与调优**：JMeter 参数化脚本 + 结果解析脚本 + 完整报告 | 见 [压测报告](docs/load-test-report.md) |
+
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [架构文档](docs/architecture.md) | 系统架构、服务清单、关键链路时序图、技术选型与取舍、数据模型、部署拓扑 |
+| [压测报告](docs/load-test-report.md) | 测试环境、JMeter 脚本、缓存/秒杀对照数据、压测中发现的真实问题、调优记录 |
+| [面试追问清单](docs/interview-qa.md) | 34 个高频追问与回答要点（秒杀、缓存、事务、可观测性、压测） |
+| [简历项目描述模板](docs/resume-project.md) | 可直接使用的简历 bullet（标准版/精简版）、写法禁忌、30 秒自述 |
+| [本地运行手册](infra/README.md) | 一键启停、地址与账号、目录结构、常见问题排查 |
 
 ## 系统架构
 
@@ -23,20 +41,27 @@ graph TB
     end
 
     subgraph Services["业务服务"]
-        ITEM["item-service :8081<br/>商品 / 搜索"]
+        ITEM["item-service :8081<br/>商品 / 多级缓存"]
         CART["cart-service :8082<br/>购物车"]
         USER["user-service :8084<br/>用户 / 地址 / 认证"]
         TRADE["trade-service :8085<br/>订单 / 库存扣减"]
         PAY["pay-service :8086<br/>支付"]
+        SECKILL["seckill-service :8087<br/>秒杀预扣 / 异步下单"]
     end
 
     subgraph Infra["基础设施"]
         NACOS["Nacos 2.1<br/>注册中心 + 配置中心"]
         MYSQL["MySQL 8.0<br/>分库存储"]
-        REDIS["Redis 7<br/>缓存 / 分布式锁"]
+        REDIS["Redis 7<br/>缓存 / 库存预扣 / 令牌桶"]
         MQ["RabbitMQ 3.8<br/>异步消息 / 延迟消息"]
         SEATA["Seata 1.5<br/>分布式事务 TC"]
         SENTINEL["Sentinel<br/>流控降级"]
+    end
+
+    subgraph Obs["可观测性"]
+        PROM["Prometheus :9090"]
+        GRAF["Grafana :3000"]
+        ZIPKIN["Zipkin :9411"]
     end
 
     P --> NG
@@ -48,12 +73,14 @@ graph TB
     GW --> USER
     GW --> TRADE
     GW --> PAY
+    GW --> SECKILL
 
     ITEM -.-> NACOS
     CART -.-> NACOS
     USER -.-> NACOS
     TRADE -.-> NACOS
     PAY -.-> NACOS
+    SECKILL -.-> NACOS
     GW -.-> NACOS
 
     ITEM --> MYSQL
@@ -61,13 +88,22 @@ graph TB
     USER --> MYSQL
     TRADE --> MYSQL
     PAY --> MYSQL
+    SECKILL --> MYSQL
 
     CART --> REDIS
+    ITEM --> REDIS
+    SECKILL --> REDIS
     TRADE --> MQ
     PAY --> MQ
+    SECKILL --> MQ
+    ITEM --> MQ
     TRADE --> SEATA
     ITEM --> SEATA
     CART --> SENTINEL
+
+    Services -.->|/actuator/prometheus| PROM
+    PROM --> GRAF
+    Services -.->|链路数据| ZIPKIN
 ```
 
 ## 模块说明
@@ -90,13 +126,15 @@ graph TB
 - **框架**：Spring Boot 2.7.12、Spring Cloud 2021.0.3、Spring Cloud Alibaba 2021.0.4.0
 - **注册/配置**：Nacos 2.1.0（服务发现 + 配置中心，共享配置 `shared-*.yaml`）
 - **数据层**：MySQL 8.0.36（按业务域分库）、MyBatis-Plus 3.4.2、HikariCP
-- **缓存**：Redis 7
+- **缓存**：Redis 7 + Caffeine（本地缓存，构成两级缓存）
 - **消息**：RabbitMQ 3.8（含 `x-delayed-message` 延迟消息插件）
 - **分布式事务**：Seata 1.5.2（AT 模式）
 - **服务治理**：Sentinel 1.8.6（流控、熔断、线程隔离）
 - **网关**：Spring Cloud Gateway + JWT（RSA 签名）
+- **可观测性**：Actuator + Micrometer + Prometheus + Grafana（指标与告警）、Sleuth + Zipkin（链路追踪）
 - **文档**：Knife4j / Swagger
-- **部署**：Docker Compose 一键起中间件，Nginx 托管前端
+- **测试**：JMeter 5.6.3（非 GUI 压测）
+- **部署**：Docker Compose 一键起 10 个中间件容器，Nginx 托管前端
 
 ## 快速开始
 
@@ -298,29 +336,40 @@ curl -X POST http://localhost:8080/orders \
 ├── lm-gateway/          # API 网关
 ├── lm-api/              # Feign 接口契约
 ├── lm-common/           # 公共组件
-├── item-service/        # 商品服务
+├── item-service/        # 商品服务（多级缓存）
 ├── cart-service/        # 购物车服务
 ├── user-service/        # 用户服务
 ├── trade-service/       # 交易服务
 ├── pay-service/         # 支付服务
+├── seckill-service/     # 秒杀服务
 ├── lm-shop/             # 单体基线版本
 ├── sql/                 # 建库建表 + 测试数据脚本
+├── docs/                # 架构文档 / 压测报告 / 面试追问清单 / 简历模板
 ├── lm-nginx/html/       # 前端静态资源（门户 / 商家后台 / 运营后台）
-└── infra/               # 部署编排：docker-compose、Nacos 配置、启动脚本
+└── infra/               # 部署编排与验证脚本
+    ├── docker-compose.yml       # 10 个容器：MySQL/Nacos/MQ/Redis/Seata/Sentinel/Nginx/Prometheus/Grafana/Zipkin
+    ├── mysql-init/              # 容器首次启动自动建库建表
+    ├── nacos-configs/           # 需要发布到 Nacos 的配置
+    ├── prometheus/ grafana/     # 抓取配置、告警规则、监控面板
+    ├── jmeter/                  # JMeter 压测脚本与结果对比表
+    ├── tools/                   # 验证脚本：缓存验证 / 秒杀并发校验 / 压测报告解析 / 造号工具
+    └── start-all.ps1 stop-all.ps1 run-service.ps1
 ```
 
 ## 数据库
 
 | 库 | 归属服务 | 表 |
 |---|---|---|
-| `lm_item` | item-service | `item` |
-| `lm_cart` | cart-service | `cart` |
+| `lm_item` | item-service | `item`、`undo_log` |
+| `lm_cart` | cart-service | `cart`、`undo_log` |
 | `lm_user` | user-service | `user`、`address` |
-| `lm_trade` | trade-service | `order`、`order_detail`、`order_logistics` |
+| `lm_trade` | trade-service | `order`、`order_detail`、`order_logistics`、`undo_log` |
 | `lm_pay` | pay-service | `pay_order` |
-| `lm_shop` | 单体基线 | 上述表合并 |
+| `lm_seckill` | seckill-service | `seckill_activity`、`seckill_order`（`uk_activity_user` 唯一索引兜底一人一单） |
+| `limemall` | lm-shop 单体基线 | 上述业务表合并 |
+| `nacos` | Nacos 配置中心 | 自带 12 张表 |
 
-使用 Seata AT 模式的服务（item / cart / trade）各自库中都有 `undo_log` 表。
+使用 Seata AT 模式的服务（item / cart / trade）各自库中都有 `undo_log` 表；金额字段一律用 `int` 存**分**。
 
 ## 开发记录
 
@@ -330,5 +379,6 @@ curl -X POST http://localhost:8080/orders \
 - [x] 阶段四：商品详情多级缓存（Caffeine + Redis、击穿/穿透/雪崩治理、跨实例失效广播）
 - [x] 阶段五：可观测性（Actuator + Prometheus 指标、Grafana 面板、7 条告警规则、管理端口隔离、Sleuth + Zipkin 链路追踪）
 - [x] 阶段六：压测与调优（JMeter 压测脚本 + 真实压测报告，缓存 5 倍吞吐、秒杀 2.4 倍吞吐）
+- [x] 阶段七：工程化交付（架构文档、面试追问清单、简历项目描述模板、README 定稿）
 
-部署与排错细节见 [infra/README.md](infra/README.md)。
+部署与排错细节见 [infra/README.md](infra/README.md)，全部文档见上方[文档索引](#文档索引)。
