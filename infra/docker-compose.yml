@@ -118,7 +118,7 @@ services:
       - "18082:18082"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./lm-nginx/html:/etc/nginx/html:ro
+      - ../lm-nginx/html:/etc/nginx/html:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
