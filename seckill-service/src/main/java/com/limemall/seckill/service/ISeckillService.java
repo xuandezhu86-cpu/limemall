@@ -28,6 +28,12 @@ public interface ISeckillService {
     void warmUp(Long activityId);
 
     /**
+     * 支付成功回调：把对应的秒杀订单状态推进为「已支付」。
+     * 由 pay.direct 交换机支付成功消息触发，幂等。
+     */
+    void markPaid(Long orderId);
+
+    /**
      * 对照实现：直接压数据库（悲观锁 + 同步落库），仅用于压测对比，不作为生产链路。
      */
     SeckillResultVO seckillByDatabase(Long activityId);

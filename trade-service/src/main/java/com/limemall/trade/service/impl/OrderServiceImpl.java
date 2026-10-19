@@ -5,6 +5,7 @@ import com.limemall.api.client.CartClient;
 import com.limemall.api.client.ItemClient;
 import com.limemall.api.dto.ItemDTO;
 import com.limemall.api.dto.OrderDetailDTO;
+import com.limemall.api.dto.SeckillOrderDTO;
 import com.limemall.common.exception.BadRequestException;
 import com.limemall.common.utils.UserContext;
 
@@ -17,14 +18,17 @@ import com.limemall.trade.service.IOrderDetailService;
 import com.limemall.trade.service.IOrderService;
 import io.seata.spring.annotation.GlobalTransactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +42,7 @@ import java.util.stream.Collectors;
  * @author LimeMall
  * @since 2023-05-05
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements IOrderService {
@@ -100,6 +105,69 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     return message;
                 });
 
+        return order.getId();
+    }
+
+    /**
+     * 秒杀成功后生成交易订单。
+     *
+     * <p>与普通下单的差异（都是有意为之）：</p>
+     * <ul>
+     *   <li>价格取秒杀价，不再按商品当前价计算；</li>
+     *   <li>不扣库存：商品库存已由秒杀服务在异步落库时扣减，这里再扣会扣两次；</li>
+     *   <li>不动购物车：秒杀绕过购物车直接成单；</li>
+     *   <li>订单号由秒杀服务生成并传进来，两边用同一个 id，用户凭这个订单号即可支付。</li>
+     * </ul>
+     * 幂等：MQ 重试或对账补偿可能重复调用，订单已存在时直接返回。
+     */
+    @Override
+    @Transactional
+    public Long createSeckillOrder(SeckillOrderDTO dto) {
+        Order exist = getById(dto.getOrderId());
+        if (exist != null) {
+            log.info("[秒杀转单] 订单已存在，幂等返回 orderId={}", dto.getOrderId());
+            return exist.getId();
+        }
+        // 1.查商品信息，仅用于订单详情的名称/规格/图片
+        List<ItemDTO> items = itemClient.queryItemByIds(Collections.singleton(dto.getItemId()));
+        ItemDTO item = items.isEmpty() ? null : items.get(0);
+
+        // 2.写订单（状态 1=待支付）
+        LocalDateTime now = LocalDateTime.now();
+        Order order = new Order()
+                .setId(dto.getOrderId())
+                .setUserId(dto.getUserId())
+                .setTotalFee(dto.getPrice() * dto.getNum())
+                .setPaymentType(3)
+                .setStatus(1)
+                .setCreateTime(now)
+                .setUpdateTime(now);
+        save(order);
+
+        // 3.写订单详情
+        OrderDetail detail = new OrderDetail()
+                .setOrderId(order.getId())
+                .setItemId(dto.getItemId())
+                .setNum(dto.getNum())
+                .setPrice(dto.getPrice())
+                .setName(item == null ? null : item.getName())
+                .setSpec(item == null ? null : item.getSpec())
+                .setImage(item == null ? null : item.getImage())
+                .setCreateTime(now)
+                .setUpdateTime(now);
+        detailService.save(detail);
+
+        // 4.延迟消息：超时未支付自动取消（与普通下单一致）
+        rabbitTemplate.convertAndSend(
+                MQConstants.DELAY_EXCHANGE_NAME,
+                MQConstants.DELAY_ORDER_KEY,
+                order.getId(),
+                message -> {
+                    message.getMessageProperties().setDelay(10000);
+                    return message;
+                });
+        log.info("[秒杀转单] 生成交易订单成功 orderId={}, userId={}, itemId={}, totalFee={}",
+                order.getId(), dto.getUserId(), dto.getItemId(), order.getTotalFee());
         return order.getId();
     }
 

@@ -51,12 +51,14 @@ public class SeckillReconcileTask {
         }
     }
 
-    /** 补偿长时间停留在「处理中」的订单 */
+    /** 补偿长时间停留在「处理中」或「库存已扣但未生成交易订单」的订单 */
     private void compensateStuckOrders() {
         LocalDateTime deadline = LocalDateTime.now()
                 .minusSeconds(properties.getReconcile().getTimeoutSeconds());
         List<SeckillOrder> stuck = orderMapper.selectList(new LambdaQueryWrapper<SeckillOrder>()
-                .eq(SeckillOrder::getStatus, SeckillConstants.STATUS_PROCESSING)
+                .in(SeckillOrder::getStatus,
+                        SeckillConstants.STATUS_PROCESSING,
+                        SeckillConstants.STATUS_STOCK_DEDUCTED)
                 .lt(SeckillOrder::getCreateTime, deadline)
                 .last("LIMIT " + BATCH_LIMIT));
         if (CollUtils.isEmpty(stuck)) {
@@ -68,7 +70,9 @@ public class SeckillReconcileTask {
                 consumer.complete(order);
                 log.info("[秒杀对账] 补偿成功 orderId={}", order.getId());
             } catch (Exception e) {
-                log.error("[秒杀对账] 补偿失败，回补库存与购买记录 orderId={}", order.getId(), e);
+                log.error("[秒杀对账] 补偿失败，回补活动库存与购买记录 orderId={}", order.getId(), e);
+                // 已知限制：这里只回补了活动库存与 Redis 预扣，已扣的商品库存没有反向接口，
+                // 需要人工介入或补一个 itemClient.restoreStock 才能完全对齐（真实项目可加）。
                 orderMapper.updateById(new SeckillOrder()
                         .setId(order.getId())
                         .setStatus(SeckillConstants.STATUS_FAILED));

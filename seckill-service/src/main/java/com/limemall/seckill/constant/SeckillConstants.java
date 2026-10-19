@@ -29,6 +29,8 @@ public interface SeckillConstants {
     /* ---------------- 秒杀订单状态 ---------------- */
     /** 处理中：Redis 已预扣，等待异步落库 */
     int STATUS_PROCESSING = 0;
+    /** 中间状态：活动与商品库存已扣减，等待生成交易订单（用于让补偿可重入、不重复扣库存） */
+    int STATUS_STOCK_DEDUCTED = 5;
     /** 待支付 */
     int STATUS_WAIT_PAY = 1;
     /** 已支付 */

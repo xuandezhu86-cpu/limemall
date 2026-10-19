@@ -179,6 +179,27 @@ public class SeckillServiceImpl implements ISeckillService {
         log.info("[秒杀] 活动 {} 预热完成，可售库存 {}", activityId, activity.getAvailableStock());
     }
 
+    @Override
+    public void markPaid(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+        // 只有「待支付」的秒杀订单才会被推进（订单号同时也是交易订单号，非秒杀订单查不到就忽略）
+        SeckillOrder order = orderMapper.selectById(orderId);
+        if (order == null) {
+            log.debug("[秒杀支付同步] 非秒杀订单，忽略 orderId={}", orderId);
+            return;
+        }
+        if (order.getStatus() != null && order.getStatus() == SeckillConstants.STATUS_PAID) {
+            log.info("[秒杀支付同步] 订单已是已支付状态，忽略重复消息 orderId={}", orderId);
+            return;
+        }
+        orderMapper.updateById(new SeckillOrder()
+                .setId(orderId)
+                .setStatus(SeckillConstants.STATUS_PAID));
+        log.info("[秒杀支付同步] 秒杀订单已更新为已支付 orderId={}", orderId);
+    }
+
     /**
      * 对照实现：不经过 Redis，直接数据库悲观锁 + 同步落库。
      * 用于压测时对比「直接压库」与「Redis 预扣 + MQ 异步」的吞吐差异。

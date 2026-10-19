@@ -56,6 +56,13 @@
             订单号：{{ result.orderId }}
             <span v-if="queuing">（正在排队落库，已查询 {{ pollCount }} 次）</span>
           </div>
+          <div v-if="result.orderId && !queuing" style="margin-top:12px;">
+            <a :href="'pay.html?id=' + result.orderId"
+               style="display:inline-block;padding:8px 26px;background:#e1251b;color:#fff;border-radius:3px;text-decoration:none;">
+              去支付
+            </a>
+            <span style="margin-left:12px;font-size:13px;color:#999;">订单已生成，15 分钟内未支付会自动取消</span>
+          </div>
         </div>
 
         <button @click="doSeckill" :disabled="!canBuy"
