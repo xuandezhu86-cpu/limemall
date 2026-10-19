@@ -2,12 +2,13 @@ package com.limemall.item.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.limemall.common.exception.BizIllegalException;
-import com.limemall.common.utils.BeanUtils;
 import com.limemall.item.domain.dto.ItemDTO;
 import com.limemall.item.domain.dto.OrderDetailDTO;
 import com.limemall.item.domain.po.Item;
 import com.limemall.item.mapper.ItemMapper;
 import com.limemall.item.service.IItemService;
+import com.limemall.item.service.ItemCacheService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +23,10 @@ import java.util.List;
  * @author LimeMall
  */
 @Service
+@RequiredArgsConstructor
 public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements IItemService {
+
+    private final ItemCacheService itemCacheService;
 
     @Override
     @Transactional
@@ -41,6 +45,7 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements II
 
     @Override
     public List<ItemDTO> queryItemByIds(Collection<Long> ids) {
-        return BeanUtils.copyList(listByIds(ids), ItemDTO.class);
+        // 统一走多级缓存，购物车 / 交易服务的 Feign 调用同样受益
+        return itemCacheService.getItems(ids);
     }
 }

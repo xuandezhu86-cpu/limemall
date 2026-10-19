@@ -6,7 +6,7 @@
 param([switch]$All)
 
 $Infra = $PSScriptRoot
-$ports = @(8080, 8081, 8082, 8084, 8085, 8086)
+$ports = @(8080, 8081, 8082, 8084, 8085, 8086, 8087, 8088)
 
 foreach ($p in $ports) {
   $procId = (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)

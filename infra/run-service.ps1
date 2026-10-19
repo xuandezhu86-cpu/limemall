@@ -30,5 +30,9 @@ if (-not (Test-Path $jar)) { throw "jar not found: $jar (run 'mvn -DskipTests cl
 
 Set-Location $moduleDir
 Write-Host "[limemall] starting $Module from $jar"
+# Heap is capped on purpose: a dev machine runs 10+ JVMs (services + extra instances),
+# without -Xmx each one grabs ~1GB of RSS and the box starts swapping.
+# Override with: $env:LM_JAVA_OPTS = '-Xmx1g' before calling this script.
+$heap = if ($env:LM_JAVA_OPTS) { $env:LM_JAVA_OPTS } else { '-Xms256m -Xmx512m' }
 # -D arguments MUST be quoted, otherwise PowerShell splits them at the dot.
-& (Join-Path $Jdk 'bin\java.exe') '-Dfile.encoding=UTF-8' '-Duser.timezone=Asia/Shanghai' -jar $jar
+& (Join-Path $Jdk 'bin\java.exe') '-Dfile.encoding=UTF-8' '-Duser.timezone=Asia/Shanghai' $heap.Split(' ') -jar $jar

@@ -114,12 +114,29 @@ foreach ($s in $Services) {
   if ($running) { Write-Host ("      {0} already on port {1}" -f $s.name, $s.port); continue }
   Start-Process -FilePath 'powershell' -ArgumentList @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Infra 'run-service.ps1'), $s.name) -WorkingDirectory (Join-Path $Root $s.name) -WindowStyle Hidden
   Write-Host ("      launched {0}" -f $s.name)
-  Start-Sleep -Seconds 3
+  Start-Sleep -Seconds 4
 }
 
+$failed = @()
 foreach ($s in $Services) {
   if (Wait-Port $s.port 180) { Write-Host ("      {0} up on {1}" -f $s.name, $s.port) }
-  else { Write-Warning ("      {0} did NOT come up on port {1}, check logs\{0}\spring.log" -f $s.name, $s.port) }
+  else { $failed += $s; Write-Warning ("      {0} did NOT come up on port {1}, check logs\{0}\spring.log" -f $s.name, $s.port) }
+}
+
+# Retry once: when 7 services boot at the same time the Nacos gRPC client can time out
+# (Client not connected / Waited 3000 ms) and the application aborts its startup.
+if ($failed.Count -gt 0) {
+  Write-Host ''
+  Write-Host ("retrying {0} service(s) that failed to start..." -f $failed.Count)
+  foreach ($s in $failed) {
+    Start-Process -FilePath 'powershell' -ArgumentList @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Infra 'run-service.ps1'), $s.name) -WorkingDirectory (Join-Path $Root $s.name) -WindowStyle Hidden
+    Write-Host ("      relaunched {0}" -f $s.name)
+    Start-Sleep -Seconds 4
+  }
+  foreach ($s in $failed) {
+    if (Wait-Port $s.port 180) { Write-Host ("      {0} up on {1}" -f $s.name, $s.port) }
+    else { Write-Warning ("      {0} STILL down on port {1}" -f $s.name, $s.port) }
+  }
 }
 
 Write-Host ''

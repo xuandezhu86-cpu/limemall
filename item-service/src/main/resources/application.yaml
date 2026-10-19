@@ -6,4 +6,38 @@ lm:
   swagger:
     title: "青柠商场商品服务接口文档"
     package: com.limemall.item.controller
+  # 商品详情多级缓存参数
+  cache:
+    local:
+      maximum-size: 1000              # 本地缓存最大条目
+      expire-after-write-seconds: 30  # 本地缓存写入后过期时间（短 TTL，降低与 DB 不一致的窗口）
+    redis:
+      ttl-seconds: 600                # 二级缓存基础过期时间
+      jitter-seconds: 60              # 过期时间随机抖动，避免同一时刻大面积失效（缓存雪崩）
+    null-ttl-seconds: 60              # 空值缓存时间（防止缓存穿透反复打库）
+    lock:
+      timeout-seconds: 3              # 重建缓存用的互斥锁超时
+      wait-millis: 50                 # 未抢到锁时的自旋间隔
+      max-retries: 5                  # 自旋重试次数
+    bloom:
+      bit-size: 16777216              # 布隆过滤器位图大小（16M bit ≈ 2MB）
+      hash-count: 4                   # 哈希函数个数
 
+spring:
+  redis:
+    host: localhost
+    port: 6381
+    database: 0
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 20
+        min-idle: 5
+        max-wait: 2000ms
+  rabbitmq:
+    host: localhost
+    port: 5672
+    virtual-host: /limemall
+    username: limemall
+    password: LmMq2026
