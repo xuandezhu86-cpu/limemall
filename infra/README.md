@@ -46,20 +46,24 @@ powershell -ExecutionPolicy Bypass -File "E:\黑马高并发电商项目\hmall-m
 ## 三、目录结构
 
 ```
-E:\黑马高并发电商项目\hmall-2\
-├─ hmall-master\          项目源码（课程原版）
-│  ├─ sql\                我按实体类生成的建库/建表/测试数据脚本（新增）
-│  └─ lm-nginx\        项目自带前端 + Windows 版 nginx（中文路径下跑不起来，见第八节）
-├─ infra\                 本地运行编排（新增）
-│  ├─ docker-compose.yml  MySQL / Nacos / RabbitMQ / Redis / Seata / Sentinel / Nginx
-│  ├─ mysql-init\         容器首次启动自动执行的 SQL（含 nacos 建表）
-│  ├─ nacos-configs\      需要发布到 Nacos 的配置
-│  ├─ rabbitmq\           自定义 MQ 镜像（带延迟消息插件）
-│  ├─ seata\              Seata Server 配置
-│  ├─ nginx\              容器版 nginx.conf
-│  ├─ start-all.ps1 / stop-all.ps1 / run-service.ps1
-│  └─ README.md           本文档
-└─ tools\                 JDK 11 + Maven 3.9.9 + settings.xml（阿里云镜像）
+<项目根>\                         （仓库根目录，即 git 仓库所在处）
+├─ pom.xml                        Maven 聚合工程
+├─ lm-gateway/ lm-api/ lm-common/ 网关 / 服务契约 / 公共组件
+├─ item-service/ cart-service/ user-service/ trade-service/ pay-service/
+├─ lm-shop/                       单体基线版本（与网关同占 8080，不能同时起）
+├─ sql/                           建库/建表/测试数据脚本
+├─ lm-nginx/html/                 前端静态资源（门户 / 商家后台 / 运营后台）
+└─ infra/                         部署编排
+   ├─ docker-compose.yml          MySQL / Nacos / RabbitMQ / Redis / Seata / Sentinel / Nginx
+   ├─ mysql-init/                 容器首次启动自动执行的 SQL（含 nacos 建表）
+   ├─ nacos-configs/              需要发布到 Nacos 的配置
+   ├─ rabbitmq/                   自定义 MQ 镜像（带延迟消息插件）
+   ├─ seata/ nginx/               Seata Server 与容器版 nginx 配置
+   ├─ tools/                      辅助脚本（生成品牌图等）
+   ├─ start-all.ps1 / stop-all.ps1 / run-service.ps1
+   └─ README.md                   本文档
+
+<项目根的上级>\tools\              JDK 11 + Maven 3.9.9 + settings.xml（工具链放在仓库外，不入库）
 ```
 
 ---
