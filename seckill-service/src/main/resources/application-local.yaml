@@ -1,0 +1,4 @@
+lm:
+  db:
+    host: localhost # 改成你自己的数据库地址
+    pw: "LmDb2026" # 改成 docker 中 MySQL 的密码

@@ -23,12 +23,13 @@ $Settings = Join-Path $Tools 'settings.xml'
 $Compose  = Join-Path $Infra 'docker-compose.yml'
 
 $Services = @(
-  @{ name = 'lm-gateway';    port = 8080 },
-  @{ name = 'item-service';  port = 8081 },
-  @{ name = 'cart-service';  port = 8082 },
-  @{ name = 'user-service';  port = 8084 },
-  @{ name = 'trade-service'; port = 8085 },
-  @{ name = 'pay-service';   port = 8086 }
+  @{ name = 'lm-gateway';     port = 8080 },
+  @{ name = 'item-service';   port = 8081 },
+  @{ name = 'cart-service';   port = 8082 },
+  @{ name = 'user-service';   port = 8084 },
+  @{ name = 'trade-service';  port = 8085 },
+  @{ name = 'pay-service';    port = 8086 },
+  @{ name = 'seckill-service'; port = 8087 }
 )
 
 function Wait-Port([int]$Port, [int]$TimeoutSec) {

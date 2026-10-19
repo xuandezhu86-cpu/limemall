@@ -43,5 +43,14 @@
         }],
         "filters": [],
         "uri": "lb://pay-service"
+    },
+    {
+        "id": "seckill",
+        "predicates": [{
+            "name": "Path",
+            "args": {"_genkey_0":"/seckill/**"}
+        }],
+        "filters": [],
+        "uri": "lb://seckill-service"
     }
 ]

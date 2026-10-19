@@ -1,0 +1,57 @@
+server:
+  port: 8087
+
+lm:
+  db:
+    database: lm_seckill
+  swagger:
+    title: "青柠商城秒杀服务接口文档"
+    package: com.limemall.seckill.controller
+
+spring:
+  redis:
+    host: localhost
+    port: 6381
+    database: 1
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 20
+        min-idle: 5
+        max-wait: 2000ms
+  rabbitmq:
+    host: localhost
+    port: 5672
+    virtual-host: /limemall
+    username: limemall
+    password: LmMq2026
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 20
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 5000ms
+
+feign:
+  okhttp:
+    enabled: true
+
+# 秒杀相关可调参数
+seckill:
+  # 令牌桶限流：容量 + 每秒补充速率（按活动维度）
+  rate-limit:
+    capacity: 3000
+    rate: 1500
+  # 对账/补偿任务
+  reconcile:
+    cron: "0/30 * * * * ?"
+    # 处理中订单超过该秒数仍未完成，视为需要补偿
+    timeout-seconds: 30
+    # Redis 与 DB 库存差异容忍度，超过则告警
+    stock-tolerance: 0

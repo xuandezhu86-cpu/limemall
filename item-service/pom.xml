@@ -9,7 +9,7 @@
         <version>1.0.0</version>
     </parent>
 
-    <groupId>com.shy</groupId>
+    <groupId>com.limemall</groupId>
     <artifactId>item-service</artifactId>
 
     <properties>
